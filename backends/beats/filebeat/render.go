@@ -52,7 +52,9 @@ func (fbc *FileBeatConfig) Render() bytes.Buffer {
 		return result
 	}
 
-	result.WriteString(fbc.Beats.String())
+	beatsConfig := *fbc.Beats
+	beatsConfig.RunMigrations(fbc.CachePath())
+	result.WriteString(beatsConfig.String())
 	result.WriteString(fbc.snippetsToString())
 
 	return result
@@ -71,8 +73,10 @@ func (fbc *FileBeatConfig) RenderToFile() error {
 func (fbc *FileBeatConfig) RenderOnChange(response graylog.ResponseCollectorConfiguration) bool {
 	newConfig := NewCollectorConfig(fbc.Beats.Context)
 
-	// create prospector slice
+	// holds file inputs
 	var prospector []map[string]interface{}
+
+	newConfig.Beats.Set(fbc.Beats.Context.UserConfig.Tags, "shipper", "tags")
 
 	for _, output := range response.Outputs {
 		if output.Backend == "filebeat" {
@@ -109,8 +113,10 @@ func (fbc *FileBeatConfig) RenderOnChange(response graylog.ResponseCollectorConf
 			prospector = append(prospector, make(map[string]interface{}))
 			idx := len(prospector) - 1
 
-			// add gl2_source_collector unconditionally
-			prospector[idx]["fields"] = map[string]interface{}{"gl2_source_collector": fbc.Beats.Context.CollectorId}
+			// add gl2_source_collector and node_id unconditionally
+			prospector[idx]["fields"] = map[string]interface{}{
+				"gl2_source_collector": fbc.Beats.Context.CollectorId,
+				"collector_node_id": fbc.Beats.Context.NodeId}
 			// we dont support stdin input type
 			prospector[idx]["input_type"] = "log"
 			for property, value := range input.Properties {
@@ -178,6 +184,8 @@ func (fbc *FileBeatConfig) RenderOnChange(response graylog.ResponseCollectorConf
 		}
 	}
 
+	newConfig.Beats.Version = fbc.Beats.Version // inherit beats version number, it's null at request time and not comparable
+	newConfig.Beats.RunMigrations(newConfig.CachePath())
 	if !fbc.Beats.Equals(newConfig.Beats) {
 		log.Infof("[%s] Configuration change detected, rewriting configuration file.", fbc.Name())
 		fbc.Beats.Update(newConfig.Beats)
@@ -189,10 +197,10 @@ func (fbc *FileBeatConfig) RenderOnChange(response graylog.ResponseCollectorConf
 }
 
 func (fbc *FileBeatConfig) ValidateConfigurationFile() bool {
-	cmd := exec.Command(fbc.ExecPath(), "-configtest", "-c", fbc.Beats.UserConfig.ConfigurationPath)
-	err := cmd.Run()
+	output, err := exec.Command(fbc.ExecPath(), "-configtest", "-c", fbc.ConfigurationPath()).CombinedOutput()
+	soutput := string(output)
 	if err != nil {
-		log.Errorf("[%s] Error during configuration validation: %s", fbc.Name(), err)
+		log.Errorf("[%s] Error during configuration validation: %s", fbc.Name(), soutput)
 		return false
 	}
 

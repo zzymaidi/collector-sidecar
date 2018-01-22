@@ -29,13 +29,16 @@ import (
 	"time"
 
 	"github.com/Graylog2/collector-sidecar/common"
+	"github.com/Graylog2/collector-sidecar/logger"
 )
 
-var log = common.Log()
+var (
+	log = logger.Log()
+	userAgent = "Graylog Collector v" + common.CollectorVersion
+)
 
 const (
 	defaultBaseURL = "http://127.0.0.1:9000/api/"
-	userAgent      = "Graylog Collector v" + common.CollectorVersion
 	mediaType      = "application/json"
 )
 
@@ -65,10 +68,9 @@ func (r *ErrorResponse) Error() string {
 		r.Response.Request.Method, r.Response.Request.URL, r.Response.StatusCode, r.Message)
 }
 
-func NewClient(httpClient *http.Client, tlsConfig *tls.Config) *Client {
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-		httpClient.Transport = &http.Transport{
+func NewHTTPClient(tlsConfig *tls.Config) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			Dial: (&net.Dialer{
 				Timeout:   30 * time.Second,
@@ -78,7 +80,13 @@ func NewClient(httpClient *http.Client, tlsConfig *tls.Config) *Client {
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			DisableCompression:    true,
-		}
+		},
+	}
+}
+
+func NewClient(httpClient *http.Client) *Client {
+	if httpClient == nil {
+		log.Fatal("http client must not be nil")
 	}
 
 	baseURL, _ := url.Parse(defaultBaseURL)

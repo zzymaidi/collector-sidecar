@@ -17,10 +17,11 @@ package common
 
 import (
 	"fmt"
-	sigar "github.com/cloudfoundry/gosigar"
 	"math"
 	"os"
 	"runtime"
+
+	sigar "github.com/elastic/gosigar"
 )
 
 var (
@@ -138,7 +139,8 @@ func GetLoad1() float64 {
 func getWindowsDrives() (drives []sigar.FileSystem) {
 	for _, drive := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		dirName := string(drive) + ":\\"
-		_, err := os.Open(dirName)
+		dirHandle, err := os.Open(dirName)
+		defer dirHandle.Close()
 		if err == nil {
 			fs := sigar.FileSystem{DirName: dirName}
 			drives = append(drives, fs)

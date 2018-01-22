@@ -52,7 +52,9 @@ func (wlbc *WinLogBeatConfig) Render() bytes.Buffer {
 		return result
 	}
 
-	result.WriteString(wlbc.Beats.String())
+	beatsConfig := *wlbc.Beats
+	beatsConfig.RunMigrations(wlbc.CachePath())
+	result.WriteString(beatsConfig.String())
 	result.WriteString(wlbc.snippetsToString())
 
 	return result
@@ -71,7 +73,7 @@ func (wlbc *WinLogBeatConfig) RenderToFile() error {
 func (wlbc *WinLogBeatConfig) RenderOnChange(response graylog.ResponseCollectorConfiguration) bool {
 	newConfig := NewCollectorConfig(wlbc.Beats.Context)
 
-	// create prospector slice
+	// holds event inputs
 	var eventlogs []interface{}
 
 	newConfig.Beats.Set(wlbc.Beats.Context.UserConfig.Tags, "shipper", "tags")
@@ -132,6 +134,15 @@ func (wlbc *WinLogBeatConfig) RenderOnChange(response graylog.ResponseCollectorC
 		}
 	}
 
+	// global fields are available since Beats 5.0.0
+	if wlbc.Beats.Version[0] >= 5 {
+		newConfig.Beats.Set(map[string]string{
+			"gl2_source_collector": wlbc.Beats.Context.CollectorId,
+			"collector_node_id": wlbc.Beats.Context.NodeId}, "fields")
+	}
+
+	newConfig.Beats.Version = wlbc.Beats.Version // inherit beats version number, it's null at request time and not comparable
+	newConfig.Beats.RunMigrations(newConfig.CachePath())
 	if !wlbc.Beats.Equals(newConfig.Beats) {
 		log.Infof("[%s] Configuration change detected, rewriting configuration file.", wlbc.Name())
 		wlbc.Beats.Update(newConfig.Beats)
@@ -143,10 +154,10 @@ func (wlbc *WinLogBeatConfig) RenderOnChange(response graylog.ResponseCollectorC
 }
 
 func (wlbc *WinLogBeatConfig) ValidateConfigurationFile() bool {
-	cmd := exec.Command(wlbc.ExecPath(), "-configtest", "-c", wlbc.Beats.UserConfig.ConfigurationPath)
-	err := cmd.Run()
+	output, err := exec.Command(wlbc.ExecPath(), "-configtest", "-c", wlbc.ConfigurationPath()).CombinedOutput()
+	soutput := string(output)
 	if err != nil {
-		log.Errorf("[%s] Error during configuration validation: %s", wlbc.Name(), err)
+		log.Errorf("[%s] Error during configuration validation: %s", wlbc.Name(), soutput)
 		return false
 	}
 

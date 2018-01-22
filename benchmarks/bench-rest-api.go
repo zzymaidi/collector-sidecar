@@ -1,12 +1,29 @@
+// This file is part of Graylog.
+//
+// Graylog is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Graylog is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+
 // This runs heartbeat and configuration requests against the server API
 //
 // Useful for profiling/benchmarking the sidecar <-> server communication without running an actual sidecar process.
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"github.com/Graylog2/collector-sidecar/api"
+	"github.com/Graylog2/collector-sidecar/api/rest"
 	"github.com/Graylog2/collector-sidecar/cfgfile"
 	"github.com/Graylog2/collector-sidecar/common"
 	"github.com/Graylog2/collector-sidecar/context"
@@ -31,6 +48,8 @@ func init() {
 	flag.Parse()
 }
 
+var httpClient = rest.NewHTTPClient(&tls.Config{})
+
 func startHeartbeat(ctx *context.Ctx, done chan bool, wg *sync.WaitGroup) {
 	fmt.Printf("[%s] starting heartbeat\n", ctx.UserConfig.NodeId)
 	for {
@@ -42,7 +61,7 @@ func startHeartbeat(ctx *context.Ctx, done chan bool, wg *sync.WaitGroup) {
 		default:
 			time.Sleep(time.Duration(ctx.UserConfig.UpdateInterval) * time.Second)
 			statusRequest := api.NewStatusRequest()
-			api.UpdateRegistration(ctx, &statusRequest)
+			api.UpdateRegistration(httpClient, ctx, &statusRequest)
 		}
 	}
 }
@@ -57,7 +76,7 @@ func startConfigUpdater(ctx *context.Ctx, done chan bool, wg *sync.WaitGroup) {
 			return
 		default:
 			time.Sleep(time.Duration(ctx.UserConfig.UpdateInterval) * time.Second)
-			_, err := api.RequestConfiguration(ctx)
+			_, err := api.RequestConfiguration(httpClient, ctx)
 			if err != nil {
 				fmt.Printf("[%s] can't fetch config from Graylog API: %v\n", ctx.UserConfig.NodeId, err)
 				return

@@ -14,6 +14,11 @@ Especially the [Step-by-Step](http://docs.graylog.org/en/2.1/pages/collector_sid
 
 ## Installation
 
+| Sidecar version  | Graylog server version |
+| ---------------- | ---------------------- |
+| 0.0.9            | 2.1.x                  |
+| 0.1.x            | 2.2.x, 2.3.x           |
+
 [Download a package](https://github.com/Graylog2/collector-sidecar/releases) and install it on the target system.
 
 
@@ -23,7 +28,7 @@ Especially the [Step-by-Step](http://docs.graylog.org/en/2.1/pages/collector_sid
 The Beats binaries (Filebeat and Winlogeventbeat) are included in the Sidecar package. So installation is just one command.
 
 ```
-  $ sudo dpkg -i collector-sidecar_0.1.0-1_amd64.deb
+  $ sudo dpkg -i collector-sidecar_0.1.4-1_amd64.deb
 ```
 
 Edit `/etc/graylog/collector-sidecar/collector_sidecar.yml`, you should set at least the correct URL to your Graylog server and proper tags.
@@ -33,13 +38,18 @@ Create a system service and start it
 
 ```
   $ sudo graylog-collector-sidecar -service install
+
+  [Ubuntu 14.04 with Upstart]
   $ sudo start collector-sidecar
+
+  [Ubuntu 16.04 with Systemd]
+  $ sudo systemctl start collector-sidecar
 ```
 
 **CentOS**
 
 ```
-  $ sudo rpm -i collector-sidecar-0.1.0-1.x86_64.rpm
+  $ sudo rpm -i collector-sidecar-0.1.4-1.x86_64.rpm
 ```
 
 Activate the Sidecar as a system service
@@ -60,7 +70,7 @@ _**The Windows installation path changed to `C:\Program Files` with version 0.0.
 It's also possible to run the installer in silent mode with
 
 ```
-  $ collector_sidecar_installer.exe /S
+  $ collector_sidecar_installer.exe /S -SERVERURL=http://10.0.2.2:9000/api -TAGS="windows,iis"
 ```
 
 Edit `C:\Program Files\graylog\collector-sidecar\collector_sidecar.yml`.
@@ -80,16 +90,21 @@ Install the NXLog package from the offical download [page](https://nxlog.org/pro
   $ sudo /etc/init.d/nxlog stop
   $ sudo update-rc.d -f nxlog remove
   $ sudo gpasswd -a nxlog adm
-  $ sudo chown -R nxlog.nxlog /var/spool/collector-sidecar/nxlog
  
-  $ sudo dpkg -i collector-sidecar_0.1.0-1_amd64.deb
+  $ sudo dpkg -i collector-sidecar_0.1.4-1_amd64.deb
+  $ sudo chown -R nxlog.nxlog /var/spool/collector-sidecar/nxlog
 ```
 
 Edit `/etc/graylog/collector-sidecar/collector_sidecar.yml`accordingly.
 
 ```
   $ sudo graylog-collector-sidecar -service install
+
+  [Ubuntu 14.04 with Upstart]
   $ sudo start collector-sidecar
+
+  [Ubuntu 16.04 with Systemd]
+  $ sudo systemctl start collector-sidecar
 ```
 
 **CentOS**
@@ -100,7 +115,7 @@ Edit `/etc/graylog/collector-sidecar/collector_sidecar.yml`accordingly.
   $ sudo gpasswd -a nxlog root
   $ sudo chown -R nxlog.nxlog /var/spool/collector-sidecar/nxlog
 
-  $ sudo rpm -i collector-sidecar-0.1.0-1.x86_64.rpm
+  $ sudo rpm -i collector-sidecar-0.1.4-1.x86_64.rpm
 ```
 
 Activate the Sidecar as a system service
@@ -116,7 +131,7 @@ _**The Windows installation path changed to `C:\Program Files` with version 0.0.
 
 Also notice that the NXLog file input is currently not able to do a SavePos for file tailing, this will be fixed in a future version.
 
-Install the NXLog package from the offical download [page](https://nxlog.org/products/nxlog-community-edition/download) and deactive the
+Install the NXLog package from the offical download [page](https://nxlog.org/products/nxlog-community-edition/download) and deactivate the
 system service. We just need the binaries installed on that host.
 
 ```
@@ -144,7 +159,7 @@ Edit `C:\Program Files\graylog\collector-sidecar\collector_sidecar.yml`, you sho
 Run the Sidecar in foreground mode for debugging purposes. Simply call it like this and look out for error messages:
 
 ```
-  $ graylog-collector-sidecar -c /etc/graylog/collector-sidecar/collector_sidecar.yml
+  $ graylog-collector-sidecar -debug -c /etc/graylog/collector-sidecar/collector_sidecar.yml
 ```
 
 ## Configuration
@@ -168,12 +183,13 @@ There are a couple of configuration settings for the Sidecar:
 
 Each backend can be enabled/disabled and should point to a binary of the actual collector and a path to a configuration file the Sidecar can write to:
 
-| Parameter          | Description                                                       |
-|--------------------|-------------------------------------------------------------------|
-| name               | The type name of the collector                                    |
-| enabled            | Weather this backend should be started by the Sidecar or not      |
-| binary_path        | Path to the actual collector binary                               |
-| configuration_path | A path for this collector configuration file Sidecar can write to |
+| Parameter          | Description                                                                      |
+|--------------------|----------------------------------------------------------------------------------|
+| name               | The type name of the collector                                                   |
+| enabled            | Weather this backend should be started by the Sidecar or not                     |
+| binary_path        | Path to the actual collector binary                                              |
+| configuration_path | A path for this collector configuration file Sidecar can write to                |
+| run_path           | (NXLog only) If PidFile is changed in the default-snippet, tell Sidecar about it |
     
 ## Compile
 
@@ -185,5 +201,5 @@ Each backend can be enabled/disabled and should point to a binary of the actual 
 
 ## Development
 
-There is a collector mock programm in order to use the collector-sidecar without actually running a collector like NXLog. Simply build it with
+There is a collector mock program in order to use the collector-sidecar without actually running a collector like NXLog. Simply build it with
 `make misc` und use the option `binary_path: misc/nxmock/nxlog`.

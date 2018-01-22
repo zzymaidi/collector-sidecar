@@ -16,8 +16,19 @@
 package graylog
 
 type ResponseCollectorRegistration struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Configuration         ResponseCollectorRegistrationConfiguration `json:"configuration"`
+	ConfigurationOverride bool                                       `json:"configuration_override"`
+	CollectorActions      []ResponseCollectorAction			 `json:"actions,omitempty"`
+}
+
+type ResponseCollectorAction struct {
+	Backend string `json:"backend"`
+	Properties map[string]interface{} `json:"properties"`
+}
+
+type ResponseCollectorRegistrationConfiguration struct {
+	UpdateInterval int  `json:"update_interval"`
+	SendStatus     bool `json:"send_status"`
 }
 
 type ResponseCollectorStatus struct {
@@ -27,6 +38,14 @@ type ResponseCollectorConfiguration struct {
 	Inputs   []ResponseCollectorInput   `json:"inputs"`
 	Outputs  []ResponseCollectorOutput  `json:"outputs"`
 	Snippets []ResponseCollectorSnippet `json:"snippets"`
+	Checksum string                     //Etag of the response
+}
+
+func (r *ResponseCollectorConfiguration) IsEmpty() bool {
+	if len(r.Inputs)+len(r.Outputs)+len(r.Snippets) == 0 {
+		return true
+	}
+	return false
 }
 
 type ResponseCollectorInput struct {

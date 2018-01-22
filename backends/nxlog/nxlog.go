@@ -23,12 +23,13 @@ import (
 	"github.com/Graylog2/collector-sidecar/common"
 	"github.com/Graylog2/collector-sidecar/context"
 	"github.com/Graylog2/collector-sidecar/system"
+	"github.com/Graylog2/collector-sidecar/logger"
 )
 
 const name = "nxlog"
 
 var (
-	log           = common.Log()
+	log           = logger.Log()
 	backendStatus = system.Status{}
 )
 
@@ -75,17 +76,24 @@ func (nxc *NxConfig) ConfigurationPath() string {
 }
 
 func (nxc *NxConfig) ExecArgs() []string {
+	// nxlog runs as system service on Windows, no foreground mode. Configuration path needs to be double quoted for service configuration
 	if runtime.GOOS == "windows" {
 		return []string{"-c", "\"" + nxc.ConfigurationPath() + "\""}
 	}
-	return []string{"-f", "-c", "\"" + nxc.ConfigurationPath() + "\""}
+	return []string{"-f", "-c", nxc.ConfigurationPath()}
 }
 
 func (nxc *NxConfig) ValidatePreconditions() bool {
 	if runtime.GOOS == "linux" {
-		if !common.IsDir("/var/run/graylog/collector-sidecar") {
-			err := common.CreatePathToFile("/var/run/graylog/collector-sidecar/nxlog.run")
+		runDir := "/var/run/graylog/collector-sidecar" // set in default-snippet
+		if nxc.UserConfig.RunPath != "" {
+			runDir = nxc.UserConfig.RunPath
+		}
+		if !common.IsDir(runDir) {
+			log.Errorf("[%s] Path to PidFile doesn't exist. Trying to create it before starting NXLog.", nxc.Name())
+			err := common.CreatePathToFile(filepath.Join(runDir, "nxlog.run"))
 			if err != nil {
+				log.Errorf("[%s] Unable to create directory %s: %v", nxc.Name(), runDir, err)
 				return false
 			}
 		}

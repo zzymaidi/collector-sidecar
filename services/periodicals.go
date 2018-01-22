@@ -16,45 +16,58 @@
 package services
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/Graylog2/collector-sidecar/api"
+	"github.com/Graylog2/collector-sidecar/api/rest"
 	"github.com/Graylog2/collector-sidecar/backends"
-	"github.com/Graylog2/collector-sidecar/common"
 	"github.com/Graylog2/collector-sidecar/context"
 	"github.com/Graylog2/collector-sidecar/daemon"
+	"github.com/Graylog2/collector-sidecar/logger"
 )
 
-var log = common.Log()
+var log = logger.Log()
+var httpClient *http.Client
 
 func StartPeriodicals(context *context.Ctx) {
+	if httpClient == nil {
+		httpClient = rest.NewHTTPClient(api.GetTlsConfig(context))
+	}
+
 	go func() {
 		for {
-			updateCollectorRegistration(context)
+			updateCollectorRegistration(httpClient, context)
 		}
 	}()
 	go func() {
+		checksum := ""
 		for {
-			checkForUpdateAndRestart(context)
+			checksum = checkForUpdateAndRestart(httpClient, checksum, context)
 		}
 	}()
 }
 
 // report collector status to Graylog server
-func updateCollectorRegistration(context *context.Ctx) {
+func updateCollectorRegistration(httpClient *http.Client, context *context.Ctx) {
 	time.Sleep(time.Duration(context.UserConfig.UpdateInterval) * time.Second)
 	statusRequest := api.NewStatusRequest()
-	api.UpdateRegistration(context, &statusRequest)
+	api.UpdateRegistration(httpClient, context, &statusRequest)
 }
 
 // fetch configuration periodically
-func checkForUpdateAndRestart(context *context.Ctx) {
+func checkForUpdateAndRestart(httpClient *http.Client, checksum string, context *context.Ctx) string {
 	time.Sleep(time.Duration(context.UserConfig.UpdateInterval) * time.Second)
-	jsonConfig, err := api.RequestConfiguration(context)
+	jsonConfig, err := api.RequestConfiguration(httpClient, checksum, context)
 	if err != nil {
 		log.Error("Can't fetch configuration from Graylog API: ", err)
-		return
+		return ""
 	}
+	if jsonConfig.IsEmpty() {
+		// etag match, skipping all other actions
+		return jsonConfig.Checksum
+	}
+
 	for name, runner := range daemon.Daemon.Runner {
 		backend := backends.Store.GetBackend(name)
 		if backend.RenderOnChange(jsonConfig) {
@@ -63,14 +76,7 @@ func checkForUpdateAndRestart(context *context.Ctx) {
 				continue
 			}
 
-			if runner.Running() {
-				// collector was already started so a Restart will not fail
-				err = runner.Restart(runner.GetService())
-			} else {
-				// collector is not running, we do a fresh start
-				err = runner.Start(runner.GetService())
-			}
-			if err != nil {
+			if err := runner.Restart(); err != nil {
 				msg := "Failed to restart collector"
 				backend.SetStatus(backends.StatusError, msg)
 				log.Errorf("[%s] %s: %v", name, msg, err)
@@ -78,4 +84,6 @@ func checkForUpdateAndRestart(context *context.Ctx) {
 
 		}
 	}
+
+	return jsonConfig.Checksum
 }
